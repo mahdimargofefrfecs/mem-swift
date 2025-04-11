@@ -15,3 +15,262 @@ User Registration: Fans can sign up or log in using their email or social media 
 Ordering Process: After selecting a stadium seat, users view available kiosks and menus. AI recommends options based on preferences and location. Fans can place orders, pay, and track them in real-time.
 Order Fulfillment: Once placed, the system forwards the order to the nearest kiosk. The kiosk prepares and notifies the system when the order is ready. A delivery person brings the order to the fan’s seat.
 Feedback and Rating: After receiving their order, fans can rate the kiosk and delivery experience. The AI learns from feedback to improve future recommendations.
+
+
+and this the code of the app
+
+import SwiftUI
+
+struct ContentView: View {
+    @StateObject var orderManager = OrderManager()
+    @State private var isLoggedIn = false
+    
+    var body: some View {
+        NavigationView {
+            if isLoggedIn {
+                VStack {
+                    Text(" قائمة المأكولات والمشروبات")
+                        .font(.largeTitle)
+                        .bold()
+                        .padding()
+                    
+                    List(menuItems) { item in
+                        MenuItemRow(item: item, orderManager: orderManager)
+                    }
+                    
+                    NavigationLink(destination: OrderScreen(orderManager: orderManager)) {
+                        Text("🛒 عرض السلة (\(orderManager.totalItems))")
+                            .font(.headline)
+                            .padding()
+                            .background(Color.blue)
+                            .foregroundColor(.white)
+                            .cornerRadius(10)
+                    }
+                    .padding()
+                }
+            } else {
+                LoginScreen(isLoggedIn: $isLoggedIn)
+            }
+        }
+    }
+}
+
+
+//
+//  LocationManager.swift
+//  MEM Swift
+//
+//  Created by Mahdi Marghalani on 4/10/25.
+//
+
+
+import Foundation
+import CoreLocation
+
+class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
+    private var locationManager = CLLocationManager()
+    
+    @Published var userLocation: CLLocationCoordinate2D?
+    
+    override init() {
+        super.init()
+        locationManager.delegate = self
+        locationManager.requestWhenInUseAuthorization()
+        locationManager.startUpdatingLocation()
+    }
+    
+    func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
+        if let location = locations.last {
+            DispatchQueue.main.async {
+                self.userLocation = location.coordinate
+            }
+        }
+    }
+}
+
+
+import SwiftUI
+
+struct LoginScreen: View {
+    @Binding var isLoggedIn: Bool
+    @State private var username = ""
+    @State private var password = ""
+
+    var body: some View {
+        VStack {
+            Text("تسجيل الدخول")
+                .font(.largeTitle)
+                .bold()
+                .padding()
+            
+            TextField("اسم المستخدم", text: $username)
+                .textFieldStyle(RoundedBorderTextFieldStyle())
+                .padding()
+
+            SecureField("كلمة المرور", text: $password)
+                .textFieldStyle(RoundedBorderTextFieldStyle())
+                .padding()
+
+            Button(action: {
+                if !username.isEmpty && !password.isEmpty {
+                    isLoggedIn = true
+                }
+            }) {
+                Text("تسجيل الدخول")
+                    .font(.headline)
+                    .padding()
+                    .background(Color.blue)
+                    .foregroundColor(.white)
+                    .cornerRadius(10)
+            }
+            .padding()
+        }
+    }
+}
+
+
+//
+//  MenuItem.swift
+//  MEM Swift
+//
+//  Created by Mahdi Marghalani on 4/11/25.
+//
+
+
+import Foundation
+
+struct MenuItem: Identifiable {
+    let id = UUID()
+    let name: String
+    let price: Double
+}
+
+let menuItems = [
+    MenuItem(name: "💧 مويه ", price: 2.0),
+    MenuItem(name: "🍿 فشار ", price: 5.0),
+    MenuItem(name: "🍟 بطاطس مقلية", price: 10.0),
+    MenuItem(name: "🥤 مشروب غازي", price: 7.0)
+]
+
+
+
+//
+//  MenuItemRow.swift
+//  MEM Swift
+//
+//  Created by Mahdi Marghalani on 4/11/25.
+//
+
+
+import SwiftUI
+
+struct MenuItemRow: View {
+    var item: MenuItem
+    @ObservedObject var orderManager: OrderManager
+    
+    var body: some View {
+        HStack {
+            Text(item.name)
+            Spacer()
+            Text("\(item.price, specifier: "%.2f") SAR")
+            
+            Button(action: {
+                orderManager.addItem(item)
+            }) {
+                Text("+")
+                    .font(.headline)
+                    .padding()
+                    .background(Color.green)
+                    .foregroundColor(.white)
+                    .cornerRadius(5)
+            }
+            
+            Button(action: {
+                orderManager.removeItem(item)
+            }) {
+                Text("-")
+                    .font(.headline)
+                    .padding()
+                    .background(Color.red)
+                    .foregroundColor(.white)
+                    .cornerRadius(5)
+            }
+        }
+        .padding()
+    }
+}
+
+
+//
+//  OrderManager.swift
+//  MEM Swift
+//
+//  Created by Mahdi Marghalani on 4/11/25.
+//
+
+
+import Foundation
+
+class OrderManager: ObservableObject {
+    @Published var items: [MenuItem] = []
+    
+    var totalItems: Int {
+        items.count
+    }
+    
+    func addItem(_ item: MenuItem) {
+        items.append(item)
+    }
+    
+    func removeItem(_ item: MenuItem) {
+        if let index = items.firstIndex(where: { $0.id == item.id }) {
+            items.remove(at: index)
+        }
+    }
+}
+
+//
+//  OrderScreen.swift
+//  MEM Swift
+//
+//  Created by Mahdi Marghalani on 4/11/25.
+//
+
+
+import SwiftUI
+
+struct OrderScreen: View {
+    @ObservedObject var orderManager: OrderManager
+
+    var body: some View {
+        VStack {
+            Text("🛒 سلة الطلبات")
+                .font(.largeTitle)
+                .bold()
+                .padding()
+            
+            List {
+                ForEach(orderManager.items) { item in
+                    HStack {
+                        Text(item.name)
+                        Spacer()
+                        Text("\(item.price, specifier: "%.2f") SAR")
+                    }
+                }
+                .onDelete { indexSet in
+                    indexSet.forEach { index in
+                        let item = orderManager.items[index]
+                        orderManager.removeItem(item)
+                    }
+                }
+            }
+            
+            Text("الإجمالي: \(orderManager.items.reduce(0) { $0 + $1.price }, specifier: "%.2f") SAR")
+                .font(.headline)
+                .padding()
+        }
+    }
+}
+
+
+البيانات المستخدمة اعطيني أبرعه منه بي النسبه ال ٪
